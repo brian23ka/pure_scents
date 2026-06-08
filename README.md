@@ -35,7 +35,7 @@ Welcome to the official repository for Pure Scents Ltd. This project is built us
 To generate a production-ready build of the website:
 ```bash
 flutter build web
-```
+``` 
 The output will be located in the `build/web` directory, ready to be hosted on platforms like Firebase Hosting, GitHub Pages, or Netlify.
 
 ## Brand Values
