@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "720771771404",
+    "firebase_url": "https://purescents-fcbe7-default-rtdb.firebaseio.com",
+    "project_id": "purescents-fcbe7",
+    "storage_bucket": "purescents-fcbe7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:720771771404:android:d76c5acc6aa0f458c29229",
+        "android_client_info": {
+          "package_name": "com.pure_scents.pure_scents"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBiXHQO-7OzgrQpOIkpSxSA3uWx1fab3L8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

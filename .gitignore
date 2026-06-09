@@ -45,3 +45,15 @@ app.*.map.json
 
 # Vercel Build
 /flutter/
+
+# Firebase and Secrets
+**/android/app/google-services.json
+**/ios/Runner/GoogleService-Info.plist
+**/ios/Firebase/google-services.json
+android/key.properties
+.env*
+
+# Testing related
+/test_driver/
+/test/.test_coverage
+/test_report/

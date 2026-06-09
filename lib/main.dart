@@ -1,12 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'cart.dart';
+import 'auth.dart';
+import 'admin.dart';
+import 'profile.dart';
+import 'firebase_options.dart';
 import 'dart:async';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+    cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+  );
+  
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => CartProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => CartProvider()),
+        ChangeNotifierProvider(create: (context) => UserProvider()),
+      ],
       child: const PureScentsApp(),
     ),
   );
@@ -51,6 +71,7 @@ class _LandingPageState extends State<LandingPage> {
   final GlobalKey _homeKey = GlobalKey();
 
   void _scrollTo(GlobalKey key) {
+    if (key.currentContext == null) return;
     Scrollable.ensureVisible(
       key.currentContext!,
       duration: const Duration(seconds: 1),
@@ -77,6 +98,11 @@ class _LandingPageState extends State<LandingPage> {
                 height: 200,
                 width: double.infinity,
                 fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  height: 200,
+                  color: Colors.grey[200],
+                  child: const Icon(Icons.nature, color: Color(0xFF004D40), size: 50),
+                ),
               ),
               const SizedBox(height: 20),
               const Text(
@@ -101,6 +127,7 @@ class _LandingPageState extends State<LandingPage> {
   @override
   Widget build(BuildContext context) {
     final bool isMobile = MediaQuery.of(context).size.width < 800;
+    final userProvider = Provider.of<UserProvider>(context);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -111,13 +138,40 @@ class _LandingPageState extends State<LandingPage> {
             DrawerHeader(
               decoration: const BoxDecoration(color: Color(0xFF004D40)),
               child: Center(
-                child: Image.asset(widget.logoPath, height: 100),
+                child: Image.asset(widget.logoPath, height: 100, errorBuilder: (c, e, s) => const Icon(Icons.eco, color: Colors.white, size: 50)),
               ),
             ),
             ListTile(title: const Text('Home'), onTap: () { Navigator.pop(context); _scrollTo(_homeKey); }),
             ListTile(title: const Text('Shop'), onTap: () { Navigator.pop(context); _scrollTo(_shopKey); }),
             ListTile(title: const Text('About'), onTap: () { Navigator.pop(context); _scrollTo(_aboutKey); }),
             ListTile(title: const Text('Contact'), onTap: () { Navigator.pop(context); _scrollTo(_contactKey); }),
+            if (userProvider.user != null)
+              ListTile(
+                title: const Text('My Profile'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.of(context).push(MaterialPageRoute(builder: (context) => const ProfileScreen()));
+                },
+              ),
+            if (userProvider.isAdmin)
+              ListTile(
+                title: const Text('Admin Panel', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.of(context).push(MaterialPageRoute(builder: (context) => const AdminScreen()));
+                },
+              ),
+            ListTile(
+              title: Text(userProvider.user == null ? 'Login' : 'Logout'),
+              onTap: () {
+                Navigator.pop(context);
+                if (userProvider.user == null) {
+                  Navigator.of(context).push(MaterialPageRoute(builder: (context) => const AuthScreen()));
+                } else {
+                  userProvider.logout();
+                }
+              },
+            ),
           ],
         ),
       ) : null,
@@ -144,7 +198,7 @@ class _LandingPageState extends State<LandingPage> {
               children: [
                 Image.asset(
                   widget.logoPath,
-                  height: isMobile ? 50 : 65, // Larger logo
+                  height: isMobile ? 50 : 65,
                   errorBuilder: (context, error, stackTrace) => const Icon(Icons.eco, color: Color(0xFF004D40)),
                 ),
                 if (!isMobile) ...[
@@ -169,6 +223,21 @@ class _LandingPageState extends State<LandingPage> {
               _navButton('Shop', () => _scrollTo(_shopKey)),
               _navButton('About', () => _scrollTo(_aboutKey)),
               _navButton('Contact', () => _scrollTo(_contactKey)),
+              if (userProvider.user != null)
+                IconButton(
+                  icon: const Icon(Icons.person_outline, color: Color(0xFF004D40)),
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (context) => const ProfileScreen())),
+                  tooltip: 'Profile',
+                ),
+              if (userProvider.isAdmin)
+                _navButton('Admin Panel', () => Navigator.of(context).push(MaterialPageRoute(builder: (context) => const AdminScreen()))),
+              _navButton(userProvider.user == null ? 'Login' : 'Logout', () {
+                if (userProvider.user == null) {
+                  Navigator.of(context).push(MaterialPageRoute(builder: (context) => const AuthScreen()));
+                } else {
+                  userProvider.logout();
+                }
+              }),
             ],
             const SizedBox(width: 10),
             Consumer<CartProvider>(
@@ -217,7 +286,7 @@ class _LandingPageState extends State<LandingPage> {
       child: TextButton(
         onPressed: onPressed,
         style: TextButton.styleFrom(
-          foregroundColor: Colors.black87,
+          foregroundColor: text == 'Admin Panel' ? Colors.red : Colors.black87,
           textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
         ),
         child: Text(text),
@@ -248,7 +317,6 @@ class _ChatBotState extends State<ChatBot> {
       _controller.clear();
     });
 
-    // Simple bot logic
     Future.delayed(const Duration(milliseconds: 500), () {
       String response = "I'm not sure about that, but you can explore our Signature Collection or contact our support!";
       String lowerMsg = userMsg.toLowerCase();
@@ -369,14 +437,13 @@ class HeroSection extends StatelessWidget {
 
     return Stack(
       children: [
-        Container(
+        SizedBox(
           width: double.infinity,
           height: isMobile ? 550 : 700,
-          decoration: const BoxDecoration(
-            image: DecorationImage(
-              image: NetworkImage('https://images.unsplash.com/photo-1615485290382-441e4d0c9cb5?auto=format&fit=crop&q=80&w=1600'),
-              fit: BoxFit.cover,
-            ),
+          child: Image.network(
+            'https://images.unsplash.com/photo-1550411234-7473e5002c61?auto=format&fit=crop&q=80&w=1600',
+            fit: BoxFit.cover,
+            errorBuilder: _imageErrorWidget,
           ),
         ),
         Container(
@@ -398,7 +465,7 @@ class HeroSection extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: isMobile ? CrossAxisAlignment.center : CrossAxisAlignment.start,
             children: [
-              Image.asset(logoPath, height: isMobile ? 60 : 80), // Very visible logo
+              Image.asset(logoPath, height: isMobile ? 60 : 80, errorBuilder: (c, e, s) => const Icon(Icons.eco, color: Color(0xFF004D40), size: 40)),
               const SizedBox(height: 30),
               Text(
                 'The Art of\nNatural Scent.',
@@ -453,6 +520,15 @@ class HeroSection extends StatelessWidget {
       ],
     );
   }
+
+  static Widget _imageErrorWidget(BuildContext context, Object error, StackTrace? stackTrace) {
+    return Container(
+      color: Colors.grey[200],
+      child: const Center(
+        child: Icon(Icons.broken_image, color: Color(0xFF004D40), size: 50),
+      ),
+    );
+  }
 }
 
 class FeaturedScents extends StatelessWidget {
@@ -460,25 +536,11 @@ class FeaturedScents extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scents = [
-      {'id': '1', 'name': 'Pencil Perfume', 'priceLabel': 'KSh 150', 'priceValue': 150, 'image': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRuz_02kegPqzaSTjlX3VfV31UWGXKvFh4qdg&s'},
-      {'id': '2', 'name': 'Pocket Spray', 'priceLabel': 'KSh 500', 'priceValue': 500, 'image': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQYVAZAIo2cNB-56vhstGiUNwgrR-S2jdXvMA&s'},
-      {'id': '3', 'name': 'Couples Kit', 'priceLabel': 'KSh 250', 'priceValue': 250, 'image': 'https://www.eyeoflove.com/cdn/shop/files/CouplesKitHerHim_4d3f9032-8567-498b-a01c-742a76f32689.jpg?v=1712876833&width=1080'},
-      {'id': '4', 'name': 'Lavender Mist', 'priceLabel': 'KSh 4,500', 'priceValue': 4500, 'image': 'https://encrypted-tbn1.gstatic.com/shopping?q=tbn:ANd9GcTfS7lex7-Gfsn7Cw5h9iii0P3vsAJ7DJSiMZzxl0Bd5Fg6QK6gXMpR966iB_0xKbVpku4AQg8KU--KY7YyRHNsEMijsmHHsyb4n0Iqbb1BM20pduPi_N1Cnw'},
-      {'id': '5', 'name': 'Ocean Breeze', 'priceLabel': 'KSh 5,200', 'priceValue': 5200, 'image': 'https://images.unsplash.com/photo-1594035910387-fea47794261f?auto=format&fit=crop&q=80&w=500'},
-      {'id': '6', 'name': 'Midnight Rose', 'priceLabel': 'KSh 6,000', 'priceValue': 6000, 'image': 'https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?auto=format&fit=crop&q=80&w=500'},
-      {'id': '7', 'name': 'Sandalwood Gold', 'priceLabel': 'KSh 7,500', 'priceValue': 7500, 'image': 'https://images.unsplash.com/photo-1616949755610-8c9bbc08f138?auto=format&fit=crop&q=80&w=500'},
-    ];
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 20),
       child: Column(
         children: [
-          Container(
-            height: 1,
-            width: 100,
-            color: const Color(0xFF004D40),
-          ),
+          Container(height: 1, width: 100, color: const Color(0xFF004D40)),
           const SizedBox(height: 20),
           const Text(
             'The Signature Collection',
@@ -486,11 +548,34 @@ class FeaturedScents extends StatelessWidget {
             style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF004D40), letterSpacing: 1),
           ),
           const SizedBox(height: 50),
-          Wrap(
-            spacing: 30,
-            runSpacing: 50,
-            alignment: WrapAlignment.center,
-            children: scents.map((scent) => ScentCard(scent: scent)).toList(),
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('products').snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Text('Error loading products: ${snapshot.error}', textAlign: TextAlign.center),
+                );
+              }
+              if (!snapshot.hasData) return const CircularProgressIndicator();
+              
+              final allProducts = snapshot.data!.docs.map((doc) {
+                var data = doc.data() as Map<String, dynamic>;
+                data['id'] = doc.id;
+                return data;
+              }).toList();
+
+              if (allProducts.isEmpty) {
+                return const Text('Add products from Admin Panel to see them here.');
+              }
+
+              return Wrap(
+                spacing: 30,
+                runSpacing: 50,
+                alignment: WrapAlignment.center,
+                children: allProducts.map((scent) => ScentCard(scent: scent)).toList(),
+              );
+            },
           ),
         ],
       ),
@@ -504,28 +589,56 @@ class ScentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    bool inStock = scent['inStock'] ?? true;
+    String? imageUrl = scent['image'];
+    String name = (scent['name'] ?? 'Untitled Scent').toString();
+
     return SizedBox(
       width: 300,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            height: 400,
-            width: 300,
-            decoration: BoxDecoration(
-              boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10)),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.network(scent['image']!, fit: BoxFit.cover),
-            ),
+          Stack(
+            children: [
+              Container(
+                height: 400,
+                width: 300,
+                decoration: BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10)),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: ColorFiltered(
+                    colorFilter: inStock ? const ColorFilter.mode(Colors.transparent, BlendMode.multiply) : const ColorFilter.mode(Colors.grey, BlendMode.saturation),
+                    child: imageUrl != null ? Image.network(
+                      imageUrl, 
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: Colors.grey[200],
+                        child: const Icon(Icons.broken_image, color: Color(0xFF004D40), size: 50),
+                      ),
+                    ) : Container(color: Colors.grey[100], child: const Icon(Icons.image_not_supported)),
+                  ),
+                ),
+              ),
+              if (!inStock)
+                Positioned(
+                  top: 20,
+                  right: 20,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(4)),
+                    child: const Text('OUT OF STOCK', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 25),
-          Text(scent['name']!.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 2)),
+          Text(name.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 2)),
           const SizedBox(height: 8),
-          Text(scent['priceLabel']!, style: const TextStyle(color: Colors.grey, fontSize: 14)),
+          Text(scent['priceLabel'] ?? 'Price TBD', style: const TextStyle(color: Colors.grey, fontSize: 14)),
           const SizedBox(height: 15),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -535,30 +648,30 @@ class ScentCard extends StatelessWidget {
                 child: const Text('EXPLORE', style: TextStyle(color: Color(0xFF004D40), fontWeight: FontWeight.bold, decoration: TextDecoration.underline)),
               ),
               const SizedBox(width: 10),
-              ElevatedButton(
-                onPressed: () {
-                  Provider.of<CartProvider>(context, listen: false).addItem(
-                    scent['id'],
-                    scent['name'],
-                    scent['priceLabel'],
-                    scent['priceValue'],
-                    scent['image'],
-                  );
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('${scent['name']} added to cart!'),
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF004D40),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                ),
-                child: const Text('ADD TO CART'),
-              ),
+              if (inStock)
+                ElevatedButton(
+                  onPressed: () {
+                    Provider.of<CartProvider>(context, listen: false).addItem(
+                      scent['id'],
+                      name,
+                      scent['priceLabel'] ?? '',
+                      scent['priceValue'] ?? 0,
+                      imageUrl ?? '',
+                    );
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('$name added to cart!')),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF004D40),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  ),
+                  child: const Text('ADD TO CART'),
+                )
+              else
+                const Text('NOT AVAILABLE', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
             ],
           ),
         ],
@@ -648,14 +761,17 @@ class AboutSection extends StatelessWidget {
           SizedBox(width: isMobile ? 0 : 100, height: isMobile ? 50 : 0),
           Expanded(
             flex: isMobile ? 0 : 1,
-            child: Container(
-              height: isMobile ? 350 : 600,
-              decoration: BoxDecoration(
-                image: const DecorationImage(
-                  image: NetworkImage('https://images.unsplash.com/photo-1557170334-a9632e77c6e4?auto=format&fit=crop&q=80&w=800'),
-                  fit: BoxFit.cover,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                'https://images.unsplash.com/photo-1557170334-a9632e77c6e4?auto=format&fit=crop&q=80&w=800',
+                height: isMobile ? 350 : 600,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  height: 350,
+                  color: Colors.grey[200],
+                  child: const Center(child: Icon(Icons.nature, color: Color(0xFF004D40), size: 50)),
                 ),
-                borderRadius: BorderRadius.circular(12),
               ),
             ),
           ),
@@ -678,10 +794,10 @@ class _NewsletterSectionState extends State<NewsletterSection> {
   late Timer _timer;
 
   final List<String> _managerIcons = [
-    'https://cdn-icons-png.flaticon.com/512/1045/1045371.png', 
+    'https://cdn-icons-png.flaticon.com/512/3135/3135715.png', 
     'https://cdn-icons-png.flaticon.com/512/3062/3062329.png', 
     'https://cdn-icons-png.flaticon.com/512/3062/3062319.png', 
-    'https://cdn-icons-png.flaticon.com/512/3062/3062335.png', 
+    'https://cdn-icons-png.flaticon.com/512/3135/3135768.png', 
   ];
 
   @override
@@ -741,6 +857,7 @@ class _NewsletterSectionState extends State<NewsletterSection> {
                       _managerIcons[index],
                       height: 55,
                       color: Colors.white,
+                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.account_circle, color: Colors.white, size: 55),
                     ),
                   ),
                 );
@@ -775,12 +892,41 @@ class Footer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isMobile = MediaQuery.of(context).size.width < 800;
+    
     return Container(
       color: Colors.white,
       padding: EdgeInsets.symmetric(vertical: 80, horizontal: isMobile ? 20 : 80),
       width: double.infinity,
       child: Column(
         children: [
+          const Text('OUR PARTNER BRANDS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 3, color: Colors.grey)),
+          const SizedBox(height: 30),
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('brands').snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Text('Error loading brands: ${snapshot.error}', style: const TextStyle(color: Colors.grey, fontSize: 10));
+              }
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return const Text('Add brand logos from Admin Panel', style: TextStyle(color: Colors.grey, fontSize: 10));
+              }
+              return Wrap(
+                spacing: 50,
+                runSpacing: 30,
+                alignment: WrapAlignment.center,
+                children: snapshot.data!.docs.map((doc) {
+                  var data = doc.data() as Map<String, dynamic>;
+                  String? logoUrl = data['logo'];
+                  if (logoUrl == null) return const SizedBox.shrink();
+                  return Opacity(
+                    opacity: 0.6,
+                    child: Image.network(logoUrl, height: 40, errorBuilder: (c, e, s) => const Icon(Icons.verified)),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 80),
           Flex(
             direction: isMobile ? Axis.vertical : Axis.horizontal,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -788,7 +934,7 @@ class Footer extends StatelessWidget {
               Column(
                 crossAxisAlignment: isMobile ? CrossAxisAlignment.center : CrossAxisAlignment.start,
                 children: [
-                  Image.asset(logoPath, height: 70), // Clearly visible logo
+                  Image.asset(logoPath, height: 70, errorBuilder: (c, e, s) => const Icon(Icons.eco, color: Color(0xFF004D40), size: 40)),
                   const SizedBox(height: 20),
                   const Text('© 2026 23HREE.', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2)),
                 ],
