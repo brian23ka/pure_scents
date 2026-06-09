@@ -441,7 +441,7 @@ class HeroSection extends StatelessWidget {
           width: double.infinity,
           height: isMobile ? 550 : 700,
           child: Image.network(
-            'https://images.unsplash.com/photo-1550411234-7473e5002c61?auto=format&fit=crop&q=80&w=1600',
+            'https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&q=80&w=1600',
             fit: BoxFit.cover,
             errorBuilder: _imageErrorWidget,
           ),
