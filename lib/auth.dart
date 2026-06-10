@@ -102,8 +102,24 @@ class _AuthScreenState extends State<AuthScreen> {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       if (_isLogin) {
         await userProvider.login(_emailController.text.trim(), _passwordController.text.trim());
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Login successful! Welcome back to Pure Scents.'),
+              backgroundColor: Color(0xFF004D40),
+            ),
+          );
+        }
       } else {
         await userProvider.signup(_emailController.text.trim(), _passwordController.text.trim(), _nameController.text.trim());
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Account created successfully! Welcome.'),
+              backgroundColor: Color(0xFF004D40),
+            ),
+          );
+        }
       }
       
       if (mounted) Navigator.of(context).pop();

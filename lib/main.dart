@@ -37,8 +37,6 @@ class PureScentsApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const String logoPath = 'lib/assests/Screenshot 2026-06-08 125015.png';
-
     return MaterialApp(
       title: 'Pure Scents Ltd',
       debugShowCheckedModeBanner: false,
@@ -50,7 +48,106 @@ class PureScentsApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Georgia',
       ),
-      home: const LandingPage(logoPath: logoPath),
+      home: const SplashScreen(),
+    );
+  }
+}
+
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2500),
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: const Interval(0.0, 0.5, curve: Curves.easeIn)),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: const Interval(0.0, 0.7, curve: Curves.elasticOut)),
+    );
+
+    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(
+      CurvedAnimation(parent: _controller, curve: const Interval(0.0, 0.7, curve: Curves.easeOutCubic)),
+    );
+
+    _controller.forward();
+
+    Timer(const Duration(seconds: 4), () {
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => 
+                const LandingPage(logoPath: 'lib/assests/Screenshot 2026-06-08 125015.png'),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 1000),
+          ),
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: SlideTransition(
+            position: _slideAnimation,
+            child: ScaleTransition(
+              scale: _scaleAnimation,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(40),
+                    child: Image.asset(
+                      'lib/assests/Screenshot 2026-06-08 125015.png',
+                      height: 150,
+                      errorBuilder: (c, e, s) => const Icon(Icons.eco, color: Color(0xFF004D40), size: 100),
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  const Text(
+                    'PURE SCENTS',
+                    style: TextStyle(
+                      color: Color(0xFF004D40),
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -64,19 +161,27 @@ class LandingPage extends StatefulWidget {
 }
 
 class _LandingPageState extends State<LandingPage> {
-  final ScrollController _scrollController = ScrollController();
-  final GlobalKey _shopKey = GlobalKey();
-  final GlobalKey _aboutKey = GlobalKey();
-  final GlobalKey _contactKey = GlobalKey();
-  final GlobalKey _homeKey = GlobalKey();
+  int _currentIndex = 0;
+  late List<Widget> _pages;
 
-  void _scrollTo(GlobalKey key) {
-    if (key.currentContext == null) return;
-    Scrollable.ensureVisible(
-      key.currentContext!,
-      duration: const Duration(seconds: 1),
-      curve: Curves.easeInOut,
-    );
+  @override
+  void initState() {
+    super.initState();
+    _pages = [
+      ListView(
+        children: [
+          HeroSection(
+            logoPath: widget.logoPath,
+            onShopNow: () => setState(() => _currentIndex = 1),
+            onDiscoverStory: _showStoryDialog,
+          ),
+          const FeaturedScents(),
+        ],
+      ),
+      const SingleChildScrollView(child: FeaturedScents()),
+      const SingleChildScrollView(child: Column(children: [AboutSection(), WhyChooseUs()])),
+      const SingleChildScrollView(child: ContactSection()),
+    ];
   }
 
   void _showStoryDialog() {
@@ -89,26 +194,13 @@ class _LandingPageState extends State<LandingPage> {
           'OUR STORY: BORN FROM THE EARTH',
           style: TextStyle(color: Color(0xFF004D40), fontWeight: FontWeight.bold, letterSpacing: 2),
         ),
-        content: SingleChildScrollView(
+        content: const SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Image.network(
-                'https://images.unsplash.com/photo-1590736704728-f4730bb30770?auto=format&fit=crop&q=80&w=800',
-                height: 200,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  height: 200,
-                  color: Colors.grey[200],
-                  child: const Icon(Icons.nature, color: Color(0xFF004D40), size: 50),
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
+              Text(
                 'In 2026, amidst the vibrant landscapes of Kenya, Pure Scents Ltd was founded on a simple realization: the most profound luxuries are those crafted by nature itself.\n\n'
-                'Our journey began in a small garden in Naivasha, where our founder, inspired by the intoxicating aroma of rain-soaked earth and wild jasmine, sought to capture these fleeting moments in a bottle. We believe that a fragrance is more than just a scent; it is a memory, an emotion, and a connection to the soul of the African continent.\n\n'
-                'Every ingredient we use is ethically sourced from local farmers. From the sun-drenched roses of the Rift Valley to the deep, resonant sandalwood of the coast, we prioritize sustainability and artisanal excellence. We don\'t just make perfumes; we curate botanical experiences that honor the earth and empower the wearer.',
+                'Our journey began in a small garden in Naivasha, where our founder, inspired by the intoxicating aroma of rain-soaked earth and wild jasmine, sought to capture these fleeting moments in a bottle.',
                 style: TextStyle(fontSize: 16, height: 1.6, color: Colors.black87),
               ),
             ],
@@ -126,171 +218,149 @@ class _LandingPageState extends State<LandingPage> {
 
   @override
   Widget build(BuildContext context) {
-    final bool isMobile = MediaQuery.of(context).size.width < 800;
     final userProvider = Provider.of<UserProvider>(context);
 
     return Scaffold(
       backgroundColor: Colors.white,
-      drawer: isMobile ? Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            DrawerHeader(
-              decoration: const BoxDecoration(color: Color(0xFF004D40)),
-              child: Center(
-                child: Image.asset(widget.logoPath, height: 100, errorBuilder: (c, e, s) => const Icon(Icons.eco, color: Colors.white, size: 50)),
-              ),
-            ),
-            ListTile(title: const Text('Home'), onTap: () { Navigator.pop(context); _scrollTo(_homeKey); }),
-            ListTile(title: const Text('Shop'), onTap: () { Navigator.pop(context); _scrollTo(_shopKey); }),
-            ListTile(title: const Text('About'), onTap: () { Navigator.pop(context); _scrollTo(_aboutKey); }),
-            ListTile(title: const Text('Contact'), onTap: () { Navigator.pop(context); _scrollTo(_contactKey); }),
-            if (userProvider.user != null)
-              ListTile(
-                title: const Text('My Profile'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.of(context).push(MaterialPageRoute(builder: (context) => const ProfileScreen()));
-                },
-              ),
-            if (userProvider.isAdmin)
-              ListTile(
-                title: const Text('Admin Panel', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.of(context).push(MaterialPageRoute(builder: (context) => const AdminScreen()));
-                },
-              ),
-            ListTile(
-              title: Text(userProvider.user == null ? 'Login' : 'Logout'),
-              onTap: () {
-                Navigator.pop(context);
-                if (userProvider.user == null) {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (context) => const AuthScreen()));
-                } else {
-                  userProvider.logout();
-                }
-              },
-            ),
-          ],
+      drawer: _buildDrawer(userProvider),
+      appBar: AppBar(
+        backgroundColor: Colors.white.withValues(alpha: 0.9),
+        elevation: 0,
+        centerTitle: true,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu_open, color: Color(0xFF004D40)),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
         ),
-      ) : null,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(80),
-        child: AppBar(
-          backgroundColor: Colors.white.withOpacity(0.9),
-          elevation: 0,
-          flexibleSpace: Container(
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.grey.withOpacity(0.1), width: 1)),
+        title: const Text(
+          'PURE SCENTS',
+          style: TextStyle(
+            color: Color(0xFF004D40),
+            fontWeight: FontWeight.bold,
+            letterSpacing: 4,
+          ),
+        ),
+        actions: [
+          Consumer<CartProvider>(
+            builder: (context, cart, child) => Badge(
+              label: Text(cart.itemCount.toString()),
+              isLabelVisible: cart.itemCount > 0,
+              child: IconButton(
+                icon: const Icon(Icons.shopping_bag_outlined, color: Color(0xFF004D40)),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (context) => const CartScreen())),
+              ),
             ),
           ),
-          leading: isMobile ? Builder(
-            builder: (context) => IconButton(
-              icon: const Icon(Icons.menu, color: Color(0xFF004D40)),
-              onPressed: () => Scaffold.of(context).openDrawer(),
-            ),
-          ) : null,
-          title: Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Image.asset(
-                  widget.logoPath,
-                  height: isMobile ? 50 : 65,
-                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.eco, color: Color(0xFF004D40)),
-                ),
-                if (!isMobile) ...[
-                  const SizedBox(width: 15),
-                  const Text(
-                    'PURE SCENTS',
-                    style: TextStyle(
-                      color: Color(0xFF004D40),
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 3,
-                      fontSize: 20,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          centerTitle: isMobile,
-          actions: [
-            if (!isMobile) ...[
-              _navButton('Home', () => _scrollTo(_homeKey)),
-              _navButton('Shop', () => _scrollTo(_shopKey)),
-              _navButton('About', () => _scrollTo(_aboutKey)),
-              _navButton('Contact', () => _scrollTo(_contactKey)),
-              if (userProvider.user != null)
-                IconButton(
-                  icon: const Icon(Icons.person_outline, color: Color(0xFF004D40)),
-                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (context) => const ProfileScreen())),
-                  tooltip: 'Profile',
-                ),
-              if (userProvider.isAdmin)
-                _navButton('Admin Panel', () => Navigator.of(context).push(MaterialPageRoute(builder: (context) => const AdminScreen()))),
-              _navButton(userProvider.user == null ? 'Login' : 'Logout', () {
-                if (userProvider.user == null) {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (context) => const AuthScreen()));
-                } else {
-                  userProvider.logout();
-                }
-              }),
-            ],
-            const SizedBox(width: 10),
-            Consumer<CartProvider>(
-              builder: (context, cart, child) => Badge(
-                label: Text(cart.itemCount.toString()),
-                isLabelVisible: cart.itemCount > 0,
-                child: IconButton(
-                  icon: const Icon(Icons.shopping_bag_outlined, color: Color(0xFF004D40)),
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (context) => const CartScreen()),
-                    );
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(width: 20),
-          ],
-        ),
+          const SizedBox(width: 5),
+        ],
       ),
-      body: SingleChildScrollView(
-        controller: _scrollController,
-        child: Column(
-          children: [
-            HeroSection(
-              key: _homeKey,
-              logoPath: widget.logoPath,
-              onShopNow: () => _scrollTo(_shopKey),
-              onDiscoverStory: _showStoryDialog,
-            ),
-            FeaturedScents(key: _shopKey),
-            const WhyChooseUs(),
-            AboutSection(key: _aboutKey),
-            NewsletterSection(key: _contactKey),
-            Footer(logoPath: widget.logoPath, onContact: () => _scrollTo(_contactKey)),
-          ],
-        ),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _pages,
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: const Color(0xFF004D40),
+        unselectedItemColor: Colors.grey[400],
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.local_mall_outlined), activeIcon: Icon(Icons.local_mall), label: 'Shop'),
+          BottomNavigationBarItem(icon: Icon(Icons.auto_awesome_outlined), activeIcon: Icon(Icons.auto_awesome), label: 'About'),
+          BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline), activeIcon: Icon(Icons.chat_bubble), label: 'Contact'),
+        ],
       ),
       floatingActionButton: const ChatBot(),
     );
   }
 
-  Widget _navButton(String text, VoidCallback onPressed) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: TextButton(
-        onPressed: onPressed,
-        style: TextButton.styleFrom(
-          foregroundColor: text == 'Admin Panel' ? Colors.red : Colors.black87,
-          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-        ),
-        child: Text(text),
+  Widget _buildDrawer(UserProvider userProvider) {
+    return Drawer(
+      child: Column(
+        children: [
+          DrawerHeader(
+            decoration: const BoxDecoration(color: Color(0xFF004D40)),
+            child: Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(40),
+                child: Image.asset(widget.logoPath, height: 80, errorBuilder: (c, e, s) => const Icon(Icons.eco, color: Colors.white, size: 50))
+              )
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.person_outline),
+            title: const Text('My Profile'),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (context) => const ProfileScreen())),
+          ),
+          if (userProvider.isAdmin)
+            ListTile(
+              leading: const Icon(Icons.admin_panel_settings_outlined, color: Colors.red),
+              title: const Text('Admin Panel', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (context) => const AdminScreen())),
+            ),
+          const Spacer(),
+          ListTile(
+            leading: Icon(userProvider.user == null ? Icons.login : Icons.logout),
+            title: Text(userProvider.user == null ? 'Login' : 'Logout'),
+            onTap: () {
+              if (userProvider.user == null) {
+                Navigator.of(context).push(MaterialPageRoute(builder: (context) => const AuthScreen()));
+              } else {
+                userProvider.logout();
+              }
+            },
+          ),
+          const SizedBox(height: 20),
+        ],
       ),
+    );
+  }
+}
+
+class HeroSection extends StatelessWidget {
+  final String logoPath;
+  final VoidCallback onShopNow;
+  final VoidCallback onDiscoverStory;
+  const HeroSection({super.key, required this.logoPath, required this.onShopNow, required this.onDiscoverStory});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          height: 500,
+          child: Image.network(
+            'https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&q=80&w=1600',
+            fit: BoxFit.cover,
+          ),
+        ),
+        Container(
+          height: 500,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Colors.white, Colors.white.withValues(alpha: 0.8), Colors.transparent],
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('The Art of\nNatural Scent.', style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Color(0xFF004D40))),
+              const SizedBox(height: 20),
+              const Text('Handcrafted in Kenya. Sustainable luxury.', style: TextStyle(fontSize: 16, color: Colors.black87)),
+              const SizedBox(height: 40),
+              ElevatedButton(onPressed: onShopNow, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF004D40), foregroundColor: Colors.white), child: const Text('SHOP NOW')),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -322,13 +392,9 @@ class _ChatBotState extends State<ChatBot> {
       String lowerMsg = userMsg.toLowerCase();
       
       if (lowerMsg.contains('shop') || lowerMsg.contains('buy') || lowerMsg.contains('price')) {
-        response = "You can find our products in the 'Signature Collection' section. We have everything from Pencil Perfumes to luxury Sandalwood Gold!";
+        response = "You can find our products in the 'Signature Collection' section.";
       } else if (lowerMsg.contains('delivery') || lowerMsg.contains('shipping')) {
         response = "We offer delivery across Kenya. You can pay via M-Pesa or Pay on Delivery!";
-      } else if (lowerMsg.contains('story') || lowerMsg.contains('about')) {
-        response = "Pure Scents was founded in 2026 with a focus on organic African botanicals. Click 'Discover Our Story' for more!";
-      } else if (lowerMsg.contains('hi') || lowerMsg.contains('hello')) {
-        response = "Hello there! Looking for a specific scent today?";
       }
 
       setState(() {
@@ -351,7 +417,7 @@ class _ChatBotState extends State<ChatBot> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 1)],
+              boxShadow: [const BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 1)],
             ),
             child: Column(
               children: [
@@ -384,7 +450,7 @@ class _ChatBotState extends State<ChatBot> {
                           margin: const EdgeInsets.symmetric(vertical: 4),
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: isBot ? Colors.grey[200] : const Color(0xFF004D40).withOpacity(0.1),
+                            color: isBot ? Colors.grey[200] : const Color(0xFF004D40).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(_messages[index]['content']!),
@@ -424,154 +490,31 @@ class _ChatBotState extends State<ChatBot> {
   }
 }
 
-class HeroSection extends StatelessWidget {
-  final String logoPath;
-  final VoidCallback onShopNow;
-  final VoidCallback onDiscoverStory;
-  const HeroSection({super.key, required this.logoPath, required this.onShopNow, required this.onDiscoverStory});
-
-  @override
-  Widget build(BuildContext context) {
-    final double width = MediaQuery.of(context).size.width;
-    final bool isMobile = width < 800;
-
-    return Stack(
-      children: [
-        SizedBox(
-          width: double.infinity,
-          height: isMobile ? 550 : 700,
-          child: Image.network(
-            'https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&q=80&w=1600',
-            fit: BoxFit.cover,
-            errorBuilder: _imageErrorWidget,
-          ),
-        ),
-        Container(
-          height: isMobile ? 550 : 700,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: isMobile ? Alignment.topCenter : Alignment.centerLeft,
-              end: isMobile ? Alignment.bottomCenter : Alignment.centerRight,
-              colors: [
-                Colors.white,
-                Colors.white.withOpacity(0.85),
-                Colors.white.withOpacity(isMobile ? 0.3 : 0),
-              ],
-            ),
-          ),
-          padding: EdgeInsets.symmetric(horizontal: isMobile ? 20 : 80),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: isMobile ? CrossAxisAlignment.center : CrossAxisAlignment.start,
-            children: [
-              Image.asset(logoPath, height: isMobile ? 60 : 80, errorBuilder: (c, e, s) => const Icon(Icons.eco, color: Color(0xFF004D40), size: 40)),
-              const SizedBox(height: 30),
-              Text(
-                'The Art of\nNatural Scent.',
-                textAlign: isMobile ? TextAlign.center : TextAlign.start,
-                style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                      color: const Color(0xFF004D40),
-                      fontWeight: FontWeight.bold,
-                      height: 1.0,
-                      fontSize: isMobile ? 45 : 80,
-                    ),
-              ),
-              const SizedBox(height: 25),
-              SizedBox(
-                width: 550,
-                child: Text(
-                  'Handcrafted in Kenya using 100% organic botanical essences. Sustainable luxury for the modern soul.',
-                  textAlign: isMobile ? TextAlign.center : TextAlign.start,
-                  style: TextStyle(fontSize: isMobile ? 18 : 22, color: Colors.black87, height: 1.6),
-                ),
-              ),
-              const SizedBox(height: 50),
-              Wrap(
-                alignment: isMobile ? WrapAlignment.center : WrapAlignment.start,
-                spacing: 20,
-                runSpacing: 20,
-                children: [
-                  ElevatedButton(
-                    onPressed: onShopNow,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF004D40),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 25),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                    ),
-                    child: const Text('SHOP NOW'),
-                  ),
-                  TextButton(
-                    onPressed: onDiscoverStory,
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF004D40),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 25),
-                      textStyle: const TextStyle(fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
-                    ),
-                    child: const Text('DISCOVER OUR STORY'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  static Widget _imageErrorWidget(BuildContext context, Object error, StackTrace? stackTrace) {
-    return Container(
-      color: Colors.grey[200],
-      child: const Center(
-        child: Icon(Icons.broken_image, color: Color(0xFF004D40), size: 50),
-      ),
-    );
-  }
-}
-
 class FeaturedScents extends StatelessWidget {
   const FeaturedScents({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 20),
+      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
       child: Column(
         children: [
-          Container(height: 1, width: 100, color: const Color(0xFF004D40)),
-          const SizedBox(height: 20),
-          const Text(
-            'The Signature Collection',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF004D40), letterSpacing: 1),
-          ),
-          const SizedBox(height: 50),
+          const Text('The Signature Collection', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF004D40))),
+          const SizedBox(height: 30),
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('products').snapshots(),
             builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Text('Error loading products: ${snapshot.error}', textAlign: TextAlign.center),
-                );
-              }
+              if (snapshot.hasError) return Text('Error: ${snapshot.error}');
               if (!snapshot.hasData) return const CircularProgressIndicator();
-              
               final allProducts = snapshot.data!.docs.map((doc) {
                 var data = doc.data() as Map<String, dynamic>;
                 data['id'] = doc.id;
                 return data;
               }).toList();
-
-              if (allProducts.isEmpty) {
-                return const Text('Add products from Admin Panel to see them here.');
-              }
-
+              if (allProducts.isEmpty) return const Text('No products found.');
               return Wrap(
-                spacing: 30,
-                runSpacing: 50,
+                spacing: 20,
+                runSpacing: 20,
                 alignment: WrapAlignment.center,
                 children: allProducts.map((scent) => ScentCard(scent: scent)).toList(),
               );
@@ -594,86 +537,29 @@ class ScentCard extends StatelessWidget {
     String name = (scent['name'] ?? 'Untitled Scent').toString();
 
     return SizedBox(
-      width: 300,
+      width: 160,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Stack(
-            children: [
-              Container(
-                height: 400,
-                width: 300,
-                decoration: BoxDecoration(
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10)),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: ColorFiltered(
-                    colorFilter: inStock ? const ColorFilter.mode(Colors.transparent, BlendMode.multiply) : const ColorFilter.mode(Colors.grey, BlendMode.saturation),
-                    child: imageUrl != null ? Image.network(
-                      imageUrl, 
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        color: Colors.grey[200],
-                        child: const Icon(Icons.broken_image, color: Color(0xFF004D40), size: 50),
-                      ),
-                    ) : Container(color: Colors.grey[100], child: const Icon(Icons.image_not_supported)),
-                  ),
-                ),
-              ),
-              if (!inStock)
-                Positioned(
-                  top: 20,
-                  right: 20,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(4)),
-                    child: const Text('OUT OF STOCK', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                  ),
-                ),
-            ],
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: (imageUrl != null && imageUrl.isNotEmpty) 
+              ? Image.network(imageUrl, height: 200, width: 160, fit: BoxFit.cover) 
+              : Container(height: 200, width: 160, color: Colors.grey[200]),
           ),
-          const SizedBox(height: 25),
-          Text(name.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 2)),
-          const SizedBox(height: 8),
-          Text(scent['priceLabel'] ?? 'Price TBD', style: const TextStyle(color: Colors.grey, fontSize: 14)),
-          const SizedBox(height: 15),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              TextButton(
-                onPressed: () {},
-                child: const Text('EXPLORE', style: TextStyle(color: Color(0xFF004D40), fontWeight: FontWeight.bold, decoration: TextDecoration.underline)),
-              ),
-              const SizedBox(width: 10),
-              if (inStock)
-                ElevatedButton(
-                  onPressed: () {
-                    Provider.of<CartProvider>(context, listen: false).addItem(
-                      scent['id'],
-                      name,
-                      scent['priceLabel'] ?? '',
-                      scent['priceValue'] ?? 0,
-                      imageUrl ?? '',
-                    );
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('$name added to cart!')),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF004D40),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                  ),
-                  child: const Text('ADD TO CART'),
-                )
-              else
-                const Text('NOT AVAILABLE', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-            ],
-          ),
+          const SizedBox(height: 10),
+          Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14), textAlign: TextAlign.center),
+          Text(scent['priceLabel'] ?? '', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+          if (inStock)
+            TextButton(
+              onPressed: () => Provider.of<CartProvider>(context, listen: false).addItem(scent['id'], name, scent['priceLabel'] ?? '', scent['priceValue'] ?? 0, imageUrl ?? ''),
+              child: const Text('ADD TO CART', style: TextStyle(fontSize: 10)),
+            )
+          else
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.0),
+              child: Text('OUT OF STOCK', style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
+            ),
         ],
       ),
     );
@@ -682,98 +568,41 @@ class ScentCard extends StatelessWidget {
 
 class WhyChooseUs extends StatelessWidget {
   const WhyChooseUs({super.key});
-
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFF9FBF9),
-      padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 20),
-      child: Wrap(
-        alignment: WrapAlignment.spaceEvenly,
-        spacing: 40,
-        runSpacing: 40,
-        children: const [
-          FeatureItem(icon: Icons.auto_awesome, title: 'ARTISANAL', description: 'Every bottle is handcrafted with precision.'),
-          FeatureItem(icon: Icons.eco_outlined, title: 'NATURAL', description: 'Sourced from the heart of African botanicals.'),
-          FeatureItem(icon: Icons.history_edu, title: 'LEGACY', description: 'Scents that linger and create lasting memories.'),
+      padding: const EdgeInsets.all(40),
+      child: const Column(
+        children: [
+          Text('WHY CHOOSE US', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF004D40))),
+          SizedBox(height: 20),
+          Text('100% Organic African Botanicals', textAlign: TextAlign.center),
+          SizedBox(height: 10),
+          Text('Every product we create is rooted in ethical sourcing and sustainable practices. We believe in luxury that doesn\'t cost the earth.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 14)),
         ],
       ),
-    );
-  }
-}
-
-class FeatureItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String description;
-  const FeatureItem({super.key, required this.icon, required this.title, required this.description});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, size: 40, color: const Color(0xFF004D40)),
-        const SizedBox(height: 20),
-        Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 2)),
-        const SizedBox(height: 15),
-        SizedBox(width: 250, child: Text(description, textAlign: TextAlign.center, style: const TextStyle(color: Colors.black54, fontSize: 14, height: 1.5))),
-      ],
     );
   }
 }
 
 class AboutSection extends StatelessWidget {
   const AboutSection({super.key});
-
   @override
   Widget build(BuildContext context) {
-    final bool isMobile = MediaQuery.of(context).size.width < 800;
     return Container(
-      padding: EdgeInsets.symmetric(vertical: 100, horizontal: isMobile ? 20 : 80),
-      child: Flex(
-        direction: isMobile ? Axis.vertical : Axis.horizontal,
+      padding: const EdgeInsets.all(40),
+      child: const Column(
         children: [
-          Expanded(
-            flex: isMobile ? 0 : 1,
-            child: Column(
-              crossAxisAlignment: isMobile ? CrossAxisAlignment.center : CrossAxisAlignment.start,
-              children: [
-                const Text('ROOTED IN NATURE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 3, color: Colors.grey)),
-                const SizedBox(height: 20),
-                Text('The Essence of Kenya', 
-                  textAlign: isMobile ? TextAlign.center : TextAlign.start,
-                  style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Color(0xFF004D40))),
-                const SizedBox(height: 40),
-                Text(
-                  'Pure Scents Ltd was born out of a passion for the rich, botanical diversity of East Africa. From the rose farms of Naivasha to the sandalwood forests, we capture the soul of the continent in every bottle.',
-                  textAlign: isMobile ? TextAlign.center : TextAlign.start,
-                  style: const TextStyle(fontSize: 18, height: 1.8, color: Colors.black87),
-                ),
-                const SizedBox(height: 30),
-                Text(
-                  'Every fragrance is a journey, meticulously blended by our master perfumers to ensure a lasting impression that is as unique as you are.',
-                  textAlign: isMobile ? TextAlign.center : TextAlign.start,
-                  style: const TextStyle(fontSize: 18, height: 1.8, color: Colors.black87),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(width: isMobile ? 0 : 100, height: isMobile ? 50 : 0),
-          Expanded(
-            flex: isMobile ? 0 : 1,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                'https://images.unsplash.com/photo-1557170334-a9632e77c6e4?auto=format&fit=crop&q=80&w=800',
-                height: isMobile ? 350 : 600,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  height: 350,
-                  color: Colors.grey[200],
-                  child: const Center(child: Icon(Icons.nature, color: Color(0xFF004D40), size: 50)),
-                ),
-              ),
-            ),
+          Text('OUR MISSION & VALUES', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF004D40), letterSpacing: 2)),
+          SizedBox(height: 25),
+          Text(
+            'Founded in 2026, Pure Scents Ltd is dedicated to capturing the essence of the Kenyan wilderness. '
+            'Every bottle is a journey through our lush forests and vibrant gardens. '
+            'We use 100% organic botanicals, sourced sustainably from local farmers in Naivasha and beyond.\n\n'
+            'Our mission is to bring the purity of nature to your daily life, one scent at a time. We blend traditional African scent-making techniques with modern sustainable luxury to create something truly unique.\n\n'
+            'We pride ourselves on community impact, providing fair wages to our harvesters and supporting local reforestation projects to ensure the biodiversity of Kenya thrives for generations to come.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 16, height: 1.6),
           ),
         ],
       ),
@@ -781,197 +610,32 @@ class AboutSection extends StatelessWidget {
   }
 }
 
-class NewsletterSection extends StatefulWidget {
-  const NewsletterSection({super.key});
-
-  @override
-  State<NewsletterSection> createState() => _NewsletterSectionState();
-}
-
-class _NewsletterSectionState extends State<NewsletterSection> {
-  late PageController _pageController;
-  int _currentPage = 0;
-  late Timer _timer;
-
-  final List<String> _managerIcons = [
-    'https://cdn-icons-png.flaticon.com/512/3135/3135715.png', 
-    'https://cdn-icons-png.flaticon.com/512/3062/3062329.png', 
-    'https://cdn-icons-png.flaticon.com/512/3062/3062319.png', 
-    'https://cdn-icons-png.flaticon.com/512/3135/3135768.png', 
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController(initialPage: 0, viewportFraction: 0.35);
-    _timer = Timer.periodic(const Duration(seconds: 3), (Timer timer) {
-      if (_currentPage < _managerIcons.length - 1) {
-        _currentPage++;
-      } else {
-        _currentPage = 0;
-      }
-      if (_pageController.hasClients) {
-        _pageController.animateToPage(
-          _currentPage,
-          duration: const Duration(milliseconds: 800),
-          curve: Curves.easeInOut,
-        );
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer.cancel();
-    _pageController.dispose();
-    super.dispose();
-  }
-
+class ContactSection extends StatelessWidget {
+  const ContactSection({super.key});
   @override
   Widget build(BuildContext context) {
     return Container(
+      padding: const EdgeInsets.all(40),
       width: double.infinity,
       color: const Color(0xFF004D40),
-      padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 20),
-      child: Column(
+      child: const Column(
         children: [
-          const Text(
-            'PURE SCENTS MANAGERS',
-            style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 4),
-          ),
-          const SizedBox(height: 40),
-          SizedBox(
-            height: 100,
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: _managerIcons.length,
-              itemBuilder: (context, index) {
-                return Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Image.network(
-                      _managerIcons[index],
-                      height: 55,
-                      color: Colors.white,
-                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.account_circle, color: Colors.white, size: 55),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 60),
-          const Text(
-            'FOR SUPPORT',
-            style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 4),
-          ),
-          const SizedBox(height: 20),
-          const SelectableText(
-            'Call: +254116921099',
-            style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w300),
-          ),
-          const SelectableText(
-            'Email: purescents254@gmail.com',
-            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w300, letterSpacing: 1),
-          ),
+          Icon(Icons.contact_support_outlined, color: Colors.white, size: 40),
+          SizedBox(height: 20),
+          Text('GET IN TOUCH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 2)),
+          SizedBox(height: 30),
+          Text('General Inquiries: purescents254@gmail.com', style: TextStyle(color: Colors.white70)),
+          SizedBox(height: 10),
+          Text('Support Contact: +254 116 145544', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+          SizedBox(height: 10),
+          Text('Wholesale: sales.purescents@gmail.com', style: TextStyle(color: Colors.white70)),
+          SizedBox(height: 20),
+          Text('Address: Nairobi, Kenya\nScent Tower, 4th Floor', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70)),
+          SizedBox(height: 40),
+          Text('Follow us for updates: @PureScentsKE', style: TextStyle(color: Colors.white38, fontSize: 12)),
+          SizedBox(height: 10),
+          Text('Available Mon-Sat: 8am - 6pm', style: TextStyle(color: Colors.white54, fontSize: 12)),
         ],
-      ),
-    );
-  }
-}
-
-class Footer extends StatelessWidget {
-  final String logoPath;
-  final VoidCallback onContact;
-  const Footer({super.key, required this.logoPath, required this.onContact});
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isMobile = MediaQuery.of(context).size.width < 800;
-    
-    return Container(
-      color: Colors.white,
-      padding: EdgeInsets.symmetric(vertical: 80, horizontal: isMobile ? 20 : 80),
-      width: double.infinity,
-      child: Column(
-        children: [
-          const Text('OUR PARTNER BRANDS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 3, color: Colors.grey)),
-          const SizedBox(height: 30),
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('brands').snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return Text('Error loading brands: ${snapshot.error}', style: const TextStyle(color: Colors.grey, fontSize: 10));
-              }
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return const Text('Add brand logos from Admin Panel', style: TextStyle(color: Colors.grey, fontSize: 10));
-              }
-              return Wrap(
-                spacing: 50,
-                runSpacing: 30,
-                alignment: WrapAlignment.center,
-                children: snapshot.data!.docs.map((doc) {
-                  var data = doc.data() as Map<String, dynamic>;
-                  String? logoUrl = data['logo'];
-                  if (logoUrl == null) return const SizedBox.shrink();
-                  return Opacity(
-                    opacity: 0.6,
-                    child: Image.network(logoUrl, height: 40, errorBuilder: (c, e, s) => const Icon(Icons.verified)),
-                  );
-                }).toList(),
-              );
-            },
-          ),
-          const SizedBox(height: 80),
-          Flex(
-            direction: isMobile ? Axis.vertical : Axis.horizontal,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: isMobile ? CrossAxisAlignment.center : CrossAxisAlignment.start,
-                children: [
-                  Image.asset(logoPath, height: 70, errorBuilder: (c, e, s) => const Icon(Icons.eco, color: Color(0xFF004D40), size: 40)),
-                  const SizedBox(height: 20),
-                  const Text('© 2026 23HREE.', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2)),
-                ],
-              ),
-              if (isMobile) const SizedBox(height: 50),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 30,
-                runSpacing: 20,
-                children: [
-                  _footerLink('INSTAGRAM'),
-                  _footerLink('FACEBOOK'),
-                  _footerLink('TIKTOK'),
-                  TextButton(onPressed: onContact, child: const Text('CONTACT US', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2, color: Colors.black87))),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 60),
-          const Divider(color: Colors.black12),
-          const SizedBox(height: 40),
-          const Text(
-            'MADE IN KENYA WITH ORGANIC BOTANICALS',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 4, fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _footerLink(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2),
       ),
     );
   }

@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'cart.dart';
 import 'auth.dart';
 
@@ -27,16 +25,9 @@ class _OrderScreenState extends State<OrderScreen> {
   bool _isLoading = false;
   String _loadingStatus = "Processing Order...";
 
-  // M-Pesa Credentials (Sandbox)
-  final String consumerKey = "z7SnqTDlDCFt3PgTpJ22NIQSo7v5vzmIla38X02lPxFldr4r";
-  final String consumerSecret = "Th1VcqVPra8wzUOfNBXK5vAHuaRHl92GMNpabkUEsxZYe310n0Vv2ENNtLzbqpGu";
-  final String businessShortCode = "174379"; 
-  final String passkey = "bfb277292146065a6f2ea11362d41e58e3beba91d953151d80c60ad0ad0801a"; 
-
   @override
   void initState() {
     super.initState();
-    // Pre-fill fields with user data if available
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       if (userProvider.user != null) {
@@ -48,119 +39,69 @@ class _OrderScreenState extends State<OrderScreen> {
     });
   }
 
-  Future<String> _getAccessToken() async {
-    String credentials = base64Encode(utf8.encode("$consumerKey:$consumerSecret"));
-    var url = Uri.parse("https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials");
-    
-    var response = await http.get(url, headers: {
-      "Authorization": "Basic $credentials",
-    }).timeout(const Duration(seconds: 10));
-
-    if (response.statusCode == 200) {
-      return json.decode(response.body)["access_token"];
-    } else {
-      throw Exception("M-Pesa Auth Failed");
-    }
-  }
-
   Future<void> _submitOrder(CartProvider cart, UserProvider userProvider) async {
-    if (!_formKey.currentState!.validate()) return;
-    if (cart.items.isEmpty) return;
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all required fields'), backgroundColor: Colors.orange)
+      );
+      return;
+    }
+    
+    if (cart.items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Your bag is empty. Add items before checking out.'))
+      );
+      return;
+    }
+
+    // Capture values before processing/clearing
+    final int finalTotal = cart.totalAmount;
+    final String itemsSummary = cart.items.values.map((i) => "${i.name} (x${i.quantity})").join(", ");
 
     setState(() {
       _isLoading = true;
-      _loadingStatus = "Checking details...";
+      _loadingStatus = "Saving your order...";
     });
 
-    String mpesaStatus = "Pending";
-    bool showManualInstructions = false;
-
     try {
-      if (_selectedPaymentMethod == PaymentMethod.mpesa) {
-        if (kIsWeb) {
-          mpesaStatus = "Web: Manual Payment Expected";
-          showManualInstructions = true;
-        } else {
-          setState(() => _loadingStatus = "Requesting M-Pesa Prompt...");
-          try {
-            String token = await _getAccessToken();
-            String timestamp = DateFormat("yyyyMMddHHmmss").format(DateTime.now());
-            String password = base64Encode(utf8.encode("$businessShortCode$passkey$timestamp"));
-            
-            String rawPhone = _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
-            String formattedPhone = rawPhone.startsWith('0') 
-                ? '254${rawPhone.substring(1)}' 
-                : rawPhone.startsWith('254') ? rawPhone : '254$rawPhone';
-
-            var mpesaResponse = await http.post(
-              Uri.parse("https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest"),
-              headers: {"Authorization": "Bearer $token", "Content-Type": "application/json"},
-              body: json.encode({
-                "BusinessShortCode": businessShortCode,
-                "Password": password,
-                "Timestamp": timestamp,
-                "TransactionType": "CustomerPayBillOnline",
-                "Amount": cart.totalAmount, 
-                "PartyA": formattedPhone,
-                "PartyB": businessShortCode,
-                "PhoneNumber": formattedPhone,
-                "CallBackURL": "https://mydomain.com/callback", 
-                "AccountReference": "PureScents",
-                "TransactionDesc": "Perfume Order"
-              }),
-            ).timeout(const Duration(seconds: 12));
-
-            if (mpesaResponse.statusCode == 200) {
-              mpesaStatus = "Prompt Sent";
-            } else {
-              mpesaStatus = "Prompt Failed (Manual Payment)";
-              showManualInstructions = true;
-            }
-          } catch (e) {
-            debugPrint("STK Push Error: $e");
-            mpesaStatus = "STK Error (Manual Payment)";
-            showManualInstructions = true;
-          }
-        }
-      } else {
-        mpesaStatus = "Pay on Delivery";
-      }
-
-      setState(() => _loadingStatus = "Finalizing Order...");
-
-      String orderItemsText = cart.items.values.map((i) => "${i.name} (x${i.quantity})").join(", ");
-
       final orderData = {
         'userId': userProvider.user?.uid,
         'name': _nameController.text.trim(),
         'reg_no': _regNoController.text.trim(),
         'phone': _phoneController.text.trim(),
         'location': _locationController.text.trim(),
-        'items': orderItemsText,
-        'total': "KSh ${cart.totalAmount}",
-        'payment_method': _selectedPaymentMethod == PaymentMethod.mpesa ? "M-Pesa" : "Pay on Delivery",
-        'mpesa_status': mpesaStatus,
+        'items': itemsSummary,
+        'total': "KSh $finalTotal",
+        'payment_method': _selectedPaymentMethod == PaymentMethod.mpesa ? "M-Pesa (Send Money)" : "Pay on Delivery",
+        'status': "Pending",
+        'timestamp': FieldValue.serverTimestamp(),
       };
 
       // 1. Save to Firestore
-      final firestoreData = Map<String, dynamic>.from(orderData);
-      firestoreData['timestamp'] = FieldValue.serverTimestamp();
-      await FirebaseFirestore.instance.collection('orders').add(firestoreData);
+      await FirebaseFirestore.instance
+          .collection('orders')
+          .add(orderData)
+          .timeout(const Duration(seconds: 15));
 
-      // 2. Update user details in their profile so they are remembered next time
+      // 2. Update user profile details
       if (userProvider.user != null) {
-        await FirebaseFirestore.instance.collection('users').doc(userProvider.user!.uid).update({
-          'phone': _phoneController.text.trim(),
-          'reg_no': _regNoController.text.trim(),
-          'location': _locationController.text.trim(),
-        });
-        // Refresh local provider data
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userProvider.user!.uid)
+            .set({
+              'phone': _phoneController.text.trim(),
+              'reg_no': _regNoController.text.trim(),
+              'location': _locationController.text.trim(),
+            }, SetOptions(merge: true))
+            .timeout(const Duration(seconds: 10));
         await userProvider.fetchUserProfile();
       }
 
-      // 3. Send to Formspree
+      // 3. Send to Formspree Backup (Fire and forget)
       final formspreeData = Map<String, dynamic>.from(orderData);
-      formspreeData['timestamp'] = DateTime.now().toIso8601String();
+      formspreeData.remove('timestamp'); // FieldValue doesn't encode to JSON
+      formspreeData['order_date'] = DateTime.now().toIso8601String();
+      
       http.post(
         Uri.parse('https://formspree.io/f/mbdeoybd'),
         headers: {'Content-Type': 'application/json'},
@@ -169,19 +110,25 @@ class _OrderScreenState extends State<OrderScreen> {
 
       if (!mounted) return;
       cart.clear();
-      _showSuccessDialog(showManualInstructions);
+      
+      _showSuccessDialog(finalTotal);
 
     } catch (error) {
+      debugPrint("Order Error: $error");
       if (!mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Order failed: $error'), backgroundColor: Colors.redAccent),
+        SnackBar(
+          content: Text('Order failed: ${error.toString()}'), 
+          backgroundColor: Colors.redAccent,
+        ),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showSuccessDialog(bool manualMpesa) {
+  void _showSuccessDialog(int total) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -191,19 +138,17 @@ class _OrderScreenState extends State<OrderScreen> {
         content: SingleChildScrollView(
           child: ListBody(
             children: [
-              if (manualMpesa && _selectedPaymentMethod == PaymentMethod.mpesa) ...[
-                const Text('Please pay manually to complete your order:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+              if (_selectedPaymentMethod == PaymentMethod.mpesa) ...[
+                const Text('To complete your order, please send money to:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
                 const SizedBox(height: 15),
-                const Text('M-Pesa Paybill: 174379'),
-                const Text('Account: Pure Scents'),
-                Text('Amount: KSh ${Provider.of<CartProvider>(context, listen: false).totalAmount}'),
+                const Text('M-Pesa Number: +254 116 145544', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const Text('Name: Pure Scents Ltd'),
+                Text('Amount: KSh $total', style: const TextStyle(fontWeight: FontWeight.bold)),
                 const Divider(),
                 const SizedBox(height: 10),
-                const Text('Your order has been saved permanently and can be tracked in your profile.'),
-              ] else if (_selectedPaymentMethod == PaymentMethod.mpesa) ...[
-                const Text('Success! Your order is saved. Please check your phone for the M-Pesa prompt.'),
+                const Text('After payment, your order will be processed. You can track it in your profile.'),
               ] else ...[
-                const Text('Order confirmed! It is now saved permanently in your profile history.'),
+                const Text('Order confirmed! We will contact you shortly for delivery. Payment will be made on delivery.'),
               ],
             ],
           ),
@@ -214,7 +159,7 @@ class _OrderScreenState extends State<OrderScreen> {
               Navigator.of(ctx).pop();
               Navigator.of(context).popUntil((route) => route.isFirst);
             },
-            child: const Text('DONE', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('DONE', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF004D40))),
           ),
         ],
       ),
@@ -240,13 +185,23 @@ class _OrderScreenState extends State<OrderScreen> {
               children: [
                 const CircularProgressIndicator(color: Color(0xFF004D40)),
                 const SizedBox(height: 25),
-                Text(_loadingStatus, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(_loadingStatus, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF004D40))),
               ],
             ))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(30),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(
+                    'Hello, ${userProvider.fullName.isNotEmpty ? userProvider.fullName.split(" ")[0] : "User"}!',
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF004D40)),
+                  ),
+                  const Text(
+                    'Confirm your delivery details below:',
+                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                  ),
+                  const SizedBox(height: 30),
                   Form(
                     key: _formKey,
                     child: Column(
@@ -255,7 +210,7 @@ class _OrderScreenState extends State<OrderScreen> {
                         const SizedBox(height: 15),
                         _buildField(_regNoController, 'Registration Number', Icons.badge),
                         const SizedBox(height: 15),
-                        _buildField(_phoneController, 'M-Pesa Number', Icons.phone, isPhone: true),
+                        _buildField(_phoneController, 'Your Phone Number', Icons.phone, isPhone: true),
                         const SizedBox(height: 15),
                         _buildField(_locationController, 'Delivery Location', Icons.location_on),
                       ],
@@ -263,7 +218,8 @@ class _OrderScreenState extends State<OrderScreen> {
                   ),
                   const SizedBox(height: 30),
                   RadioListTile<PaymentMethod>(
-                    title: const Text('M-Pesa Payment'),
+                    title: const Text('M-Pesa (Send Money)'),
+                    subtitle: const Text('Payment details shown after order'),
                     activeColor: const Color(0xFF004D40),
                     value: PaymentMethod.mpesa,
                     groupValue: _selectedPaymentMethod,
@@ -277,7 +233,7 @@ class _OrderScreenState extends State<OrderScreen> {
                     onChanged: (v) => setState(() => _selectedPaymentMethod = v!),
                   ),
                   const Divider(height: 50),
-                  Text('TOTAL: KSh ${cart.totalAmount}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF004D40))),
+                  Center(child: Text('TOTAL: KSh ${cart.totalAmount}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF004D40)))),
                   const SizedBox(height: 30),
                   SizedBox(
                     width: double.infinity,
@@ -306,6 +262,10 @@ class _OrderScreenState extends State<OrderScreen> {
         labelText: label, 
         prefixIcon: Icon(icon, color: const Color(0xFF004D40)), 
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Color(0xFF004D40), width: 2),
+        ),
       ),
       validator: (v) => v == null || v.isEmpty ? 'Required' : null,
     );

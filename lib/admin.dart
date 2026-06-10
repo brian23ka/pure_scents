@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -15,7 +19,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -29,20 +33,18 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           tabs: const [
             Tab(icon: Icon(Icons.shopping_bag), text: 'ORDERS'),
             Tab(icon: Icon(Icons.analytics), text: 'ANALYTICS'),
-            Tab(icon: Icon(Icons.inventory), text: 'INVENTORY'),
+            Tab(icon: Icon(Icons.inventory), text: 'PRODUCTS'),
             Tab(icon: Icon(Icons.add_box), text: 'ADD PRODUCT'),
-            Tab(icon: Icon(Icons.verified), text: 'BRANDS'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          const OrdersList(),
-          const AnalyticsTab(),
-          const InventoryList(),
-          const AddProductForm(),
-          const BrandManagement(),
+        children: const [
+          OrdersList(),
+          AnalyticsTab(),
+          InventoryList(collection: 'products'),
+          AddItemForm(collection: 'products', title: 'ADD SIGNATURE PRODUCT'),
         ],
       ),
     );
@@ -50,69 +52,42 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 }
 
 class InventoryList extends StatelessWidget {
-  const InventoryList({super.key});
-
-  Future<void> _importDefaults(BuildContext context) async {
-    final List<Map<String, dynamic>> defaults = [
-      {'name': 'Pencil Perfume', 'priceValue': 150, 'priceLabel': 'KSh 150', 'image': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRuz_02kegPqzaSTjlX3VfV31UWGXKvFh4qdg&s'},
-      {'name': 'Pocket Spray', 'priceValue': 500, 'priceLabel': 'KSh 500', 'image': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQYVAZAIo2cNB-56vhstGiUNwgrR-S2jdXvMA&s'},
-      {'name': 'Couples Kit', 'priceValue': 250, 'priceLabel': 'KSh 250', 'image': 'https://www.eyeoflove.com/cdn/shop/files/CouplesKitHerHim_4d3f9032-8567-498b-a01c-742a76f32689.jpg?v=1712876833&width=1080'},
-      {'name': 'Lavender Mist', 'priceValue': 4500, 'priceLabel': 'KSh 4,500', 'image': 'https://images.unsplash.com/photo-1595981267035-7b04ca84a82d?auto=format&fit=crop&q=80&w=500'},
-      {'name': 'Ocean Breeze', 'priceValue': 5200, 'priceLabel': 'KSh 5,200', 'image': 'https://images.unsplash.com/photo-1594035910387-fea47794261f?auto=format&fit=crop&q=80&w=500'},
-      {'name': 'Midnight Rose', 'priceValue': 6000, 'priceLabel': 'KSh 6,000', 'image': 'https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?auto=format&fit=crop&q=80&w=500'},
-      {'name': 'Sandalwood Gold', 'priceValue': 7500, 'priceLabel': 'KSh 7,500', 'image': 'https://images.unsplash.com/photo-1616949755610-8c9bbc08f138?auto=format&fit=crop&q=80&w=500'},
-    ];
-
-    try {
-      for (var item in defaults) {
-        item['inStock'] = true;
-        item['timestamp'] = FieldValue.serverTimestamp();
-        await FirebaseFirestore.instance.collection('products').add(item);
-      }
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Signature Collection Imported!')));
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Import failed: $e')));
-    }
-  }
+  final String collection;
+  const InventoryList({super.key, required this.collection});
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('products').snapshots(),
+      stream: FirebaseFirestore.instance.collection(collection).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         
-        if (snapshot.data!.docs.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('No products in database.'),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () => _importDefaults(context),
-                  child: const Text('IMPORT SIGNATURE COLLECTION'),
-                ),
-              ],
-            ),
-          );
-        }
+        if (snapshot.data!.docs.isEmpty) return Center(child: Text('No items in $collection.'));
 
         return ListView.builder(
           padding: const EdgeInsets.all(15),
           itemCount: snapshot.data!.docs.length,
           itemBuilder: (context, index) {
-            var product = snapshot.data!.docs[index];
-            var data = product.data() as Map<String, dynamic>;
+            var item = snapshot.data!.docs[index];
+            var data = item.data() as Map<String, dynamic>;
             bool inStock = data['inStock'] ?? true;
             String? imageUrl = data['image'];
 
             return Card(
               child: ListTile(
-                leading: imageUrl != null && imageUrl.isNotEmpty
-                    ? Image.network(imageUrl, width: 50, height: 50, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.image))
-                    : const Icon(Icons.image),
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: (imageUrl != null && imageUrl.isNotEmpty)
+                      ? Image.network(
+                          imageUrl, 
+                          width: 50, 
+                          height: 50, 
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey),
+                        )
+                      : const Icon(Icons.image, color: Colors.grey),
+                ),
                 title: Text(data['name'] ?? 'No Name'),
                 subtitle: Text(data['priceLabel'] ?? 'No Price'),
                 trailing: Row(
@@ -120,12 +95,12 @@ class InventoryList extends StatelessWidget {
                   children: [
                     Switch(
                       value: inStock,
-                      onChanged: (val) => product.reference.update({'inStock': val}),
+                      onChanged: (val) => item.reference.update({'inStock': val}),
                       activeColor: const Color(0xFF004D40),
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => product.reference.delete(),
+                      onPressed: () => item.reference.delete(),
                     ),
                   ],
                 ),
@@ -138,99 +113,169 @@ class InventoryList extends StatelessWidget {
   }
 }
 
-class BrandManagement extends StatefulWidget {
-  const BrandManagement({super.key});
+class AddItemForm extends StatefulWidget {
+  final String collection;
+  final String title;
+  const AddItemForm({super.key, required this.collection, required this.title});
 
   @override
-  State<BrandManagement> createState() => _BrandManagementState();
+  State<AddItemForm> createState() => _AddItemFormState();
 }
 
-class _BrandManagementState extends State<BrandManagement> {
+class _AddItemFormState extends State<AddItemForm> {
+  final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _priceController = TextEditingController();
   final _urlController = TextEditingController();
   bool _isLoading = false;
+  XFile? _imageFile;
+  final _picker = ImagePicker();
 
-  Future<void> _addBrand() async {
-    if (_nameController.text.isEmpty || _urlController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter both name and logo URL')));
+  Future<void> _pickImage() async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (pickedFile != null) {
+      setState(() {
+        _imageFile = pickedFile;
+        _urlController.clear();
+      });
+    }
+  }
+
+  Future<String?> _uploadImage(XFile xFile) async {
+    try {
+      String fileName = '${widget.collection}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+      Reference ref = FirebaseStorage.instance.ref().child(fileName);
+      
+      if (kIsWeb) {
+        await ref.putData(await xFile.readAsBytes(), SettableMetadata(contentType: 'image/jpeg'));
+      } else {
+        await ref.putFile(File(xFile.path), SettableMetadata(contentType: 'image/jpeg'));
+      }
+      
+      return await ref.getDownloadURL();
+    } catch (e) {
+      debugPrint('Upload error: $e');
+      return null;
+    }
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_imageFile == null && _urlController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please upload an image or paste a valid URL')));
       return;
     }
     
     setState(() => _isLoading = true);
     try {
-      await FirebaseFirestore.instance.collection('brands').add({
-        'name': _nameController.text,
-        'logo': _urlController.text,
-        'timestamp': FieldValue.serverTimestamp(),
+      int priceValue = int.parse(_priceController.text);
+      String imageUrl = _urlController.text.trim();
+
+      if (_imageFile != null) {
+        String? uploadedUrl = await _uploadImage(_imageFile!);
+        if (uploadedUrl != null) {
+          imageUrl = uploadedUrl;
+        } else {
+          throw 'Image upload failed.';
+        }
+      }
+
+      await FirebaseFirestore.instance.collection(widget.collection).add({
+        'name': _nameController.text.trim(), 
+        'priceValue': priceValue, 
+        'priceLabel': 'KSh ${NumberFormat('#,###').format(priceValue)}', 
+        'image': imageUrl, 
+        'inStock': true, 
+        'timestamp': FieldValue.serverTimestamp()
       });
       
-      _nameController.clear();
+      _nameController.clear(); 
+      _priceController.clear(); 
       _urlController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Brand Added!')));
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-    } finally {
-      setState(() => _isLoading = false);
+      setState(() => _imageFile = null);
+      
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${widget.collection.toUpperCase()} Added Successfully!')));
+    } catch (e) { 
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'))); 
+    } finally { 
+      setState(() => _isLoading = false); 
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(20),
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(15),
-              child: Column(
-                children: [
-                  const Text('ADD PARTNER BRAND', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 15),
-                  TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Brand Name', border: OutlineInputBorder())),
-                  const SizedBox(height: 10),
-                  TextField(controller: _urlController, decoration: const InputDecoration(labelText: 'Logo Image URL', border: OutlineInputBorder(), hintText: 'https://...')),
-                  const SizedBox(height: 15),
-                  if (_isLoading) 
-                    const CircularProgressIndicator() 
-                  else 
-                    ElevatedButton(
-                      onPressed: _addBrand, 
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF004D40), foregroundColor: Colors.white), 
-                      child: const Text('SAVE BRAND')
-                    ),
-                ],
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(30),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            const SizedBox(height: 30),
+            
+            GestureDetector(
+              onTap: _pickImage,
+              child: Container(
+                height: 150,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: _imageFile != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(12), 
+                        child: kIsWeb 
+                          ? Image.network(_imageFile!.path, fit: BoxFit.cover) 
+                          : Image.file(File(_imageFile!.path), fit: BoxFit.cover)
+                      )
+                    : _urlController.text.isNotEmpty
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(12), 
+                            child: Image.network(_urlController.text.trim(), fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.broken_image)),
+                          )
+                        : const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [Icon(Icons.add_a_photo, size: 40, color: Colors.grey), Text('Tap to upload image', style: TextStyle(color: Colors.grey))],
+                          ),
               ),
             ),
-          ),
+            const SizedBox(height: 20),
+            
+            TextFormField(
+              controller: _nameController, 
+              decoration: const InputDecoration(labelText: 'Name', border: OutlineInputBorder()),
+              validator: (v) => v!.isEmpty ? 'Name required' : null,
+            ),
+            const SizedBox(height: 15),
+            TextFormField(
+              controller: _priceController, 
+              decoration: const InputDecoration(labelText: 'Price (Numeric)', border: OutlineInputBorder()), 
+              keyboardType: TextInputType.number,
+              validator: (v) => v!.isEmpty ? 'Price required' : null,
+            ),
+            const SizedBox(height: 15),
+            TextFormField(
+              controller: _urlController, 
+              decoration: const InputDecoration(labelText: 'Or Paste Direct Image URL', border: OutlineInputBorder()),
+              onChanged: (v) => setState(() {}),
+            ),
+            const SizedBox(height: 30),
+            if (_isLoading) 
+              const CircularProgressIndicator() 
+            else 
+              SizedBox(
+                width: double.infinity, 
+                child: ElevatedButton(
+                  onPressed: _submit, 
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF004D40), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 20)), 
+                  child: const Text('SAVE ITEM')
+                )
+              ),
+          ],
         ),
-        const Divider(),
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('brands').orderBy('timestamp', descending: true).snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
-              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-              return ListView.builder(
-                itemCount: snapshot.data!.docs.length,
-                itemBuilder: (context, index) {
-                  var brand = snapshot.data!.docs[index];
-                  var data = brand.data() as Map<String, dynamic>;
-                  String? logoUrl = data['logo'];
-                  
-                  return ListTile(
-                    leading: logoUrl != null && logoUrl.isNotEmpty
-                        ? Image.network(logoUrl, width: 40, height: 40, errorBuilder: (c, e, s) => const Icon(Icons.verified))
-                        : const Icon(Icons.verified),
-                    title: Text(data['name'] ?? 'Unknown Brand'),
-                    trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => brand.reference.delete()),
-                  );
-                },
-              );
-            },
-          ),
-        )
-      ],
+      ),
     );
   }
 }
@@ -388,94 +433,6 @@ class OrdersList extends StatelessWidget {
           },
         );
       },
-    );
-  }
-}
-
-class AddProductForm extends StatefulWidget {
-  const AddProductForm({super.key});
-
-  @override
-  State<AddProductForm> createState() => _AddProductFormState();
-}
-
-class _AddProductFormState extends State<AddProductForm> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _priceController = TextEditingController();
-  final _urlController = TextEditingController();
-  bool _isLoading = false;
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    
-    setState(() => _isLoading = true);
-    try {
-      int priceValue = int.parse(_priceController.text);
-
-      await FirebaseFirestore.instance.collection('products').add({
-        'name': _nameController.text, 
-        'priceValue': priceValue, 
-        'priceLabel': 'KSh ${NumberFormat('#,###').format(priceValue)}', 
-        'image': _urlController.text, 
-        'inStock': true, 
-        'timestamp': FieldValue.serverTimestamp()
-      });
-      
-      _nameController.clear(); 
-      _priceController.clear(); 
-      _urlController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Product Added!')));
-    } catch (e) { 
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'))); 
-    } finally { 
-      setState(() => _isLoading = false); 
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(30),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            const Text('ADD NEW PRODUCT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            const SizedBox(height: 30),
-            TextFormField(
-              controller: _nameController, 
-              decoration: const InputDecoration(labelText: 'Product Name', border: OutlineInputBorder()),
-              validator: (v) => v!.isEmpty ? 'Name required' : null,
-            ),
-            const SizedBox(height: 20),
-            TextFormField(
-              controller: _priceController, 
-              decoration: const InputDecoration(labelText: 'Price (Numeric)', border: OutlineInputBorder()), 
-              keyboardType: TextInputType.number,
-              validator: (v) => v!.isEmpty ? 'Price required' : null,
-            ),
-            const SizedBox(height: 20),
-            TextFormField(
-              controller: _urlController, 
-              decoration: const InputDecoration(labelText: 'Product Image URL', border: OutlineInputBorder(), hintText: 'https://...'),
-              validator: (v) => v!.isEmpty ? 'Image URL required' : null,
-            ),
-            const SizedBox(height: 30),
-            if (_isLoading) 
-              const CircularProgressIndicator() 
-            else 
-              SizedBox(
-                width: double.infinity, 
-                child: ElevatedButton(
-                  onPressed: _submit, 
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF004D40), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 20)), 
-                  child: const Text('ADD PRODUCT')
-                )
-              ),
-          ],
-        ),
-      ),
     );
   }
 }
