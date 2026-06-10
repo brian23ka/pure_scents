@@ -70,6 +70,11 @@ class _LandingPageState extends State<LandingPage> {
   final GlobalKey _contactKey = GlobalKey();
   final GlobalKey _homeKey = GlobalKey();
 
+  // Search state
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
+
   void _scrollTo(GlobalKey key) {
     if (key.currentContext == null) return;
     Scrollable.ensureVisible(
@@ -193,28 +198,52 @@ class _LandingPageState extends State<LandingPage> {
           ) : null,
           title: Padding(
             padding: const EdgeInsets.only(top: 10),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Image.asset(
-                  widget.logoPath,
-                  height: isMobile ? 50 : 65,
-                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.eco, color: Color(0xFF004D40)),
-                ),
-                if (!isMobile) ...[
-                  const SizedBox(width: 15),
-                  const Text(
-                    'PURE SCENTS',
-                    style: TextStyle(
-                      color: Color(0xFF004D40),
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 3,
-                      fontSize: 20,
+            child: _isSearching 
+              ? TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: 'Search scents...',
+                    border: InputBorder.none,
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.close, color: Color(0xFF004D40)),
+                      onPressed: () {
+                        setState(() {
+                          _isSearching = false;
+                          _searchController.clear();
+                          _searchQuery = "";
+                        });
+                      },
                     ),
                   ),
-                ],
-              ],
-            ),
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value;
+                    });
+                  },
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset(
+                      widget.logoPath,
+                      height: isMobile ? 50 : 65,
+                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.eco, color: Color(0xFF004D40)),
+                    ),
+                    if (!isMobile) ...[
+                      const SizedBox(width: 15),
+                      const Text(
+                        'PURE SCENTS',
+                        style: TextStyle(
+                          color: Color(0xFF004D40),
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 3,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
           ),
           centerTitle: isMobile,
           actions: [
@@ -239,6 +268,20 @@ class _LandingPageState extends State<LandingPage> {
                 }
               }),
             ],
+            const SizedBox(width: 10),
+            IconButton(
+              icon: Icon(_isSearching ? Icons.search_off : Icons.search, color: const Color(0xFF004D40)),
+              onPressed: () {
+                setState(() {
+                  _isSearching = !_isSearching;
+                  if (!_isSearching) {
+                    _searchQuery = "";
+                    _searchController.clear();
+                  }
+                });
+              },
+              tooltip: 'Search products',
+            ),
             const SizedBox(width: 10),
             Consumer<CartProvider>(
               builder: (context, cart, child) => Badge(
@@ -268,7 +311,7 @@ class _LandingPageState extends State<LandingPage> {
               onShopNow: () => _scrollTo(_shopKey),
               onDiscoverStory: _showStoryDialog,
             ),
-            FeaturedScents(key: _shopKey),
+            FeaturedScents(key: _shopKey, searchQuery: _searchQuery),
             const WhyChooseUs(),
             AboutSection(key: _aboutKey),
             NewsletterSection(key: _contactKey),
@@ -532,7 +575,8 @@ class HeroSection extends StatelessWidget {
 }
 
 class FeaturedScents extends StatelessWidget {
-  const FeaturedScents({super.key});
+  final String searchQuery;
+  const FeaturedScents({super.key, this.searchQuery = ""});
 
   @override
   Widget build(BuildContext context) {
@@ -565,15 +609,35 @@ class FeaturedScents extends StatelessWidget {
                 return data;
               }).toList();
 
-              if (allProducts.isEmpty) {
-                return const Text('Add products from Admin Panel to see them here.');
+              // Search Filter
+              final filteredProducts = searchQuery.isEmpty
+                  ? allProducts
+                  : allProducts.where((product) {
+                      final name = (product['name'] ?? '').toString().toLowerCase();
+                      return name.contains(searchQuery.toLowerCase());
+                    }).toList();
+
+              if (filteredProducts.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.all(40.0),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.search_off, size: 60, color: Colors.grey),
+                      const SizedBox(height: 20),
+                      Text(
+                        'No scents found matching "$searchQuery"',
+                        style: const TextStyle(color: Colors.grey, fontSize: 18),
+                      ),
+                    ],
+                  ),
+                );
               }
 
               return Wrap(
                 spacing: 30,
                 runSpacing: 50,
                 alignment: WrapAlignment.center,
-                children: allProducts.map((scent) => ScentCard(scent: scent)).toList(),
+                children: filteredProducts.map((scent) => ScentCard(scent: scent)).toList(),
               );
             },
           ),
